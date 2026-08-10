@@ -1,98 +1,780 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import Banner from "@/components/Banner";
+import ProductCard from "@/components/ProductCard";
+import SearchBar from "@/components/SearchBar";
+import { Colors } from "@/constants/theme";
+import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
+import { getProducts } from "@/services/api";
+import { Product } from "@/types/Product";
+
+type SortOption = "none" | "priceLow" | "priceHigh" | "rating";
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState<SortOption>("none");
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { addToCart } = useCart();
+  const { addToWishlist } = useWishlist();
+
+  // =========================
+  // FETCH PRODUCTS
+  // =========================
+  const fetchProducts = async () => {
+    try {
+      const data = await getProducts();
+      setProducts(data);
+    } catch (error) {
+      console.log("Error fetching products:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // =========================
+  // CATEGORIES
+  // =========================
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(products.map((item) => item.category))
+    );
+
+    return ["All", ...uniqueCategories];
+  }, [products]);
+
+  // =========================
+  // FILTER + SEARCH + SORT
+  // =========================
+  const filteredProducts = useMemo(() => {
+    let result = [...products];
+
+    const searchText = search.trim().toLowerCase();
+
+    if (searchText) {
+      result = result.filter(
+        (item) =>
+          item.title.toLowerCase().includes(searchText) ||
+          item.category.toLowerCase().includes(searchText) ||
+          item.brand.toLowerCase().includes(searchText)
+      );
+    }
+
+    if (category !== "All") {
+      result = result.filter(
+        (item) => item.category === category
+      );
+    }
+
+    if (sort === "priceLow") {
+      result.sort((a, b) => a.price - b.price);
+    }
+
+    if (sort === "priceHigh") {
+      result.sort((a, b) => b.price - a.price);
+    }
+
+    if (sort === "rating") {
+      result.sort((a, b) => b.rating - a.rating);
+    }
+
+    return result;
+  }, [products, search, category, sort]);
+
+  // =========================
+  // REFRESH
+  // =========================
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProducts();
+  };
+
+  // =========================
+  // CLEAR FILTERS
+  // =========================
+  const clearFilters = () => {
+    setSearch("");
+    setCategory("All");
+    setSort("none");
+  };
+
+  const hasFilters =
+    search.trim() !== "" ||
+    category !== "All" ||
+    sort !== "none";
+
+  // =========================
+  // LOADING
+  // =========================
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loading}>
+        <View style={styles.loadingIcon}>
+          <Ionicons
+            name="bag-handle-outline"
+            size={34}
+            color={Colors.light.primary}
+          />
+        </View>
+
+        <ActivityIndicator
+          size="large"
+          color={Colors.light.primary}
+        />
+
+        <Text style={styles.loadingTitle}>
+          Loading EliteMart
+        </Text>
+
+        <Text style={styles.loadingSubtitle}>
+          Finding the best products for you...
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        showsVerticalScrollIndicator={false}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.light.primary}
+          />
+        }
+        ListHeaderComponent={
+          <>
+            {/* ================= HEADER ================= */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.delivery}>
+                  Deliver To
+                </Text>
+
+                <View style={styles.locationRow}>
+                  <Ionicons
+                    name="location"
+                    size={17}
+                    color={Colors.light.primary}
+                  />
+
+                  <Text style={styles.name}>
+                    Atharva
+                  </Text>
+
+                  <Text style={styles.wave}>
+                    👋
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={styles.notificationButton}
+                onPress={() => {}}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={24}
+                  color={Colors.light.text}
+                />
+
+                <View style={styles.notificationDot} />
+              </Pressable>
+            </View>
+
+            {/* ================= SEARCH ================= */}
+            <SearchBar
+              value={search}
+              onChangeText={setSearch}
+            />
+
+            {/* ================= BANNER ================= */}
+            <Banner />
+
+            {/* ================= CATEGORIES ================= */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                Categories
+              </Text>
+
+              {category !== "All" && (
+                <Pressable
+                  onPress={() => setCategory("All")}
+                >
+                  <Text style={styles.clearSmall}>
+                    Reset
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            <FlatList
+              data={categories}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item}
+              contentContainerStyle={
+                styles.categoryList
+              }
+              renderItem={({ item }) => {
+                const active = category === item;
+
+                return (
+                  <Pressable
+                    style={[
+                      styles.categoryButton,
+                      active &&
+                        styles.activeCategory,
+                    ]}
+                    onPress={() =>
+                      setCategory(item)
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        active &&
+                          styles.activeCategoryText,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+
+            {/* ================= PRODUCTS HEADER ================= */}
+            <View style={styles.productsHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>
+                  Popular Products
+                </Text>
+
+                <Text style={styles.resultCount}>
+                  {filteredProducts.length}{" "}
+                  {filteredProducts.length === 1
+                    ? "product"
+                    : "products"}{" "}
+                  found
+                </Text>
+              </View>
+
+              {hasFilters && (
+                <Pressable
+                  style={styles.clearButton}
+                  onPress={clearFilters}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={17}
+                    color={
+                      Colors.light.primary
+                    }
+                  />
+
+                  <Text style={styles.clearText}>
+                    Clear
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* ================= SORT ================= */}
+            <View style={styles.sortContainer}>
+              <Text style={styles.sortLabel}>
+                Sort by
+              </Text>
+
+              <View style={styles.sortRow}>
+                <Pressable
+                  style={[
+                    styles.sortButton,
+                    sort === "priceLow" &&
+                      styles.activeSort,
+                  ]}
+                  onPress={() =>
+                    setSort(
+                      sort === "priceLow"
+                        ? "none"
+                        : "priceLow"
+                    )
+                  }
+                >
+                  <Ionicons
+                    name="arrow-down"
+                    size={14}
+                    color={
+                      sort === "priceLow"
+                        ? "#FFFFFF"
+                        : "#374151"
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.sortText,
+                      sort === "priceLow" &&
+                        styles.activeSortText,
+                    ]}
+                  >
+                    Low
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.sortButton,
+                    sort === "priceHigh" &&
+                      styles.activeSort,
+                  ]}
+                  onPress={() =>
+                    setSort(
+                      sort === "priceHigh"
+                        ? "none"
+                        : "priceHigh"
+                    )
+                  }
+                >
+                  <Ionicons
+                    name="arrow-up"
+                    size={14}
+                    color={
+                      sort === "priceHigh"
+                        ? "#FFFFFF"
+                        : "#374151"
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.sortText,
+                      sort === "priceHigh" &&
+                        styles.activeSortText,
+                    ]}
+                  >
+                    High
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.sortButton,
+                    sort === "rating" &&
+                      styles.activeSort,
+                  ]}
+                  onPress={() =>
+                    setSort(
+                      sort === "rating"
+                        ? "none"
+                        : "rating"
+                    )
+                  }
+                >
+                  <Ionicons
+                    name="star"
+                    size={14}
+                    color={
+                      sort === "rating"
+                        ? "#FFFFFF"
+                        : "#F59E0B"
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.sortText,
+                      sort === "rating" &&
+                        styles.activeSortText,
+                    ]}
+                  >
+                    Rating
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+          </>
+        }
+        renderItem={({ item }) => (
+          <ProductCard
+            product={item}
+            onPress={() => {
+              router.push({
+                pathname: "/product/[id]",
+                params: {
+                  id: item.id.toString(),
+                },
+              });
+            }}
+            onAddToCart={() => addToCart(item)}
+            onWishlist={() => addToWishlist(item)}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons
+                name="search-outline"
+                size={42}
+                color={Colors.light.primary}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              No Products Found
+            </Text>
+
+            <Text style={styles.emptySubtitle}>
+              We couldn&apos;t find any products matching
+              your search.
+            </Text>
+
+            <Pressable
+              style={styles.emptyButton}
+              onPress={clearFilters}
+            >
+              <Text style={styles.emptyButtonText}>
+                Clear Filters
+              </Text>
+            </Pressable>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  // ================= CONTAINER =================
+
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    paddingHorizontal: 16,
   },
-  stepContainer: {
-    gap: 8,
+
+  listContent: {
+    paddingBottom: 35,
+  },
+
+  columnWrapper: {
+    justifyContent: "space-between",
+  },
+
+  // ================= LOADING =================
+
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.light.background,
+    paddingHorizontal: 30,
+  },
+
+  loadingIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
+  loadingTitle: {
+    marginTop: 14,
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+
+  loadingSubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    color: Colors.light.subtitle,
+    textAlign: "center",
+  },
+
+  // ================= HEADER =================
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  headerLeft: {
+    flex: 1,
+  },
+
+  delivery: {
+    fontSize: 13,
+    color: Colors.light.subtitle,
+    marginBottom: 3,
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  name: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: Colors.light.text,
+    marginLeft: 4,
+  },
+
+  wave: {
+    fontSize: 20,
+    marginLeft: 5,
+  },
+
+  notificationButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    position: "relative",
+  },
+
+  notificationDot: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+
+  // ================= CATEGORIES =================
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 18,
+    marginBottom: 10,
+  },
+
+  sectionTitle: {
+    fontSize: 21,
+    fontWeight: "800",
+    color: Colors.light.text,
+  },
+
+  clearSmall: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  categoryList: {
+    paddingBottom: 4,
+  },
+
+  categoryButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 17,
+    paddingVertical: 10,
+    borderRadius: 22,
+    marginRight: 9,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  activeCategory: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+
+  categoryText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  activeCategoryText: {
+    color: "#FFFFFF",
+  },
+
+  // ================= PRODUCTS HEADER =================
+
+  productsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 22,
+    marginBottom: 4,
+  },
+
+  resultCount: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Colors.light.subtitle,
+  },
+
+  clearButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#EEF2FF",
+  },
+
+  clearText: {
+    marginLeft: 4,
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.light.primary,
+  },
+
+  // ================= SORT =================
+
+  sortContainer: {
+    marginTop: 12,
+    marginBottom: 4,
+  },
+
+  sortLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.light.subtitle,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+
+  sortRow: {
+    flexDirection: "row",
+  },
+
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 11,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  activeSort: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+
+  sortText: {
+    marginLeft: 5,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  activeSortText: {
+    color: "#FFFFFF",
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginTop: 15,
+    marginBottom: 4,
+  },
+
+  // ================= EMPTY =================
+
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 25,
+    paddingTop: 70,
+  },
+
+  emptyIconContainer: {
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  emptyTitle: {
+    fontSize: 21,
+    fontWeight: "800",
+    color: Colors.light.text,
+  },
+
+  emptySubtitle: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 21,
+    color: Colors.light.subtitle,
+    textAlign: "center",
+  },
+
+  emptyButton: {
+    marginTop: 20,
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+
+  emptyButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
