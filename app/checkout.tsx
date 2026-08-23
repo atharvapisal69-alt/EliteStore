@@ -1,8 +1,10 @@
 import { Colors } from "@/constants/theme";
 import { useCart } from "@/context/CartContext";
 import { router } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -15,33 +17,75 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function Checkout() {
   const { cart, placeOrder } = useCart();
 
+  const [placingOrder, setPlacingOrder] =
+    useState(false);
+
   const subtotal = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) =>
+      sum + item.price * item.quantity,
     0
   );
 
-  const deliveryCharge = subtotal > 1000 ? 0 : 99;
-  const total = subtotal + deliveryCharge;
+  const deliveryCharge =
+    subtotal > 1000 ? 0 : 99;
+
+  const total =
+    subtotal + deliveryCharge;
 
   const handlePlaceOrder = async () => {
+    if (placingOrder) return;
+
+    if (cart.length === 0) {
+      Alert.alert(
+        "Cart Empty",
+        "Please add a product before placing an order."
+      );
+      return;
+    }
+
     try {
+      setPlacingOrder(true);
+
       const orderId = await placeOrder();
 
-      router.replace({
-        pathname: "/success",
-        params: {
-          orderId: orderId.toString(),
-        },
-      });
-    } catch (error) {
-      console.log("Order placement error:", error);
+      Alert.alert(
+        "Order Placed 🎉",
+        `Your order ${orderId} has been placed successfully.`,
+        [
+          {
+            text: "View Order",
+            onPress: () => {
+              router.replace({
+                pathname: "/order-details",
+                params: {
+                  id: orderId,
+                },
+              });
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.log(
+        "ORDER PLACEMENT ERROR:",
+        error
+      );
+
+      Alert.alert(
+        "Order Failed",
+        error?.message ||
+          "Unable to place your order. Please try again."
+      );
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
-  // Empty cart protection
   if (cart.length === 0) {
     return (
-      <SafeAreaView style={styles.emptyContainer}>
+      <SafeAreaView
+        style={styles.emptyContainer}
+      >
         <Text style={styles.emptyTitle}>
           Your Cart is Empty
         </Text>
@@ -52,7 +96,7 @@ export default function Checkout() {
 
         <Pressable
           style={styles.shopButton}
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/(tabs)")}
         >
           <Text style={styles.shopButtonText}>
             Continue Shopping
@@ -66,9 +110,13 @@ export default function Checkout() {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={cart}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) =>
+          item.id.toString()
+        }
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={
+          styles.listContent
+        }
         ListHeaderComponent={
           <Text style={styles.heading}>
             Checkout
@@ -77,7 +125,9 @@ export default function Checkout() {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Image
-              source={{ uri: item.thumbnail }}
+              source={{
+                uri: item.thumbnail,
+              }}
               style={styles.image}
             />
 
@@ -99,7 +149,10 @@ export default function Checkout() {
 
               <Text style={styles.itemTotal}>
                 Item Total: ₹
-                {(item.price * item.quantity).toFixed(2)}
+                {(
+                  item.price *
+                  item.quantity
+                ).toFixed(2)}
               </Text>
             </View>
           </View>
@@ -128,7 +181,9 @@ export default function Checkout() {
               <Text style={styles.summaryValue}>
                 {deliveryCharge === 0
                   ? "FREE"
-                  : `₹${deliveryCharge.toFixed(2)}`}
+                  : `₹${deliveryCharge.toFixed(
+                      2
+                    )}`}
               </Text>
             </View>
 
@@ -145,12 +200,32 @@ export default function Checkout() {
             </View>
 
             <Pressable
-              style={styles.button}
+              style={[
+                styles.button,
+                placingOrder &&
+                  styles.disabledButton,
+              ]}
               onPress={handlePlaceOrder}
+              disabled={placingOrder}
             >
-              <Text style={styles.buttonText}>
-                Place Order
-              </Text>
+              {placingOrder ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#FFFFFF" />
+
+                  <Text
+                    style={[
+                      styles.buttonText,
+                      { marginLeft: 10 },
+                    ]}
+                  >
+                    Placing Order...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.buttonText}>
+                  Place Order
+                </Text>
+              )}
             </Pressable>
           </View>
         }
@@ -285,6 +360,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     marginTop: 25,
+  },
+
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   buttonText: {

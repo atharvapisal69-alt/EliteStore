@@ -3,15 +3,18 @@ import { Tabs } from "expo-router";
 import React from "react";
 
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 export default function TabLayout() {
   const { cart } = useCart();
+  const { wishlist } = useWishlist();
 
-  // Total quantity of all products
   const cartCount = cart.reduce(
     (total, item) => total + item.quantity,
     0
   );
+
+  const wishlistCount = wishlist.length;
 
   return (
     <Tabs
@@ -36,7 +39,6 @@ export default function TabLayout() {
         },
       }}
     >
-      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -52,7 +54,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* CART */}
       <Tabs.Screen
         name="cart"
         options={{
@@ -66,7 +67,6 @@ export default function TabLayout() {
             />
           ),
 
-          // Cart Badge
           tabBarBadge:
             cartCount > 0
               ? cartCount > 99
@@ -88,7 +88,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* WISHLIST */}
       <Tabs.Screen
         name="wishlist"
         options={{
@@ -101,10 +100,28 @@ export default function TabLayout() {
               color={color}
             />
           ),
+
+          tabBarBadge:
+            wishlistCount > 0
+              ? wishlistCount > 99
+                ? "99+"
+                : wishlistCount
+              : undefined,
+
+          tabBarBadgeStyle: {
+            backgroundColor: "#EF4444",
+            color: "#FFFFFF",
+            fontSize: 10,
+            fontWeight: "700",
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            textAlign: "center",
+            lineHeight: 18,
+          },
         }}
       />
 
-      {/* PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{

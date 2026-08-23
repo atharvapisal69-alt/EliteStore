@@ -19,14 +19,18 @@ import { useWishlist } from "@/context/WishlistContext";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
-
   const { cart, orders } = useCart();
   const { wishlist } = useWishlist();
 
-  const displayName = user?.name || "User";
+  const displayName = user?.name?.trim() || "User";
 
   const avatarLetter =
-    displayName.trim().charAt(0).toUpperCase() || "U";
+    displayName.charAt(0).toUpperCase() || "U";
+
+  const cartCount = cart.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
 
   const handleLogout = () => {
     Alert.alert(
@@ -50,10 +54,7 @@ export default function ProfileScreen() {
 
               await logout();
             } catch (error) {
-              console.log(
-                "Logout error:",
-                error
-              );
+              console.log("Logout error:", error);
             }
           },
         },
@@ -67,7 +68,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* Header */}
+        {/* HEADER */}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.header}>
@@ -81,9 +82,7 @@ export default function ProfileScreen() {
 
           <Pressable
             style={styles.settingsCircle}
-            onPress={() =>
-              router.push("/settings")
-            }
+            onPress={() => router.push("/settings")}
           >
             <Ionicons
               name="settings-outline"
@@ -93,7 +92,7 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* Profile Card */}
+        {/* PROFILE CARD */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -119,9 +118,7 @@ export default function ProfileScreen() {
 
           <Pressable
             style={styles.editButton}
-            onPress={() =>
-              router.push("/settings")
-            }
+            onPress={() => router.push("/settings")}
           >
             <Ionicons
               name="create-outline"
@@ -131,68 +128,33 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* Quick Stats */}
+        {/* STATS */}
         <View style={styles.statsCard}>
-          <View style={styles.stat}>
-            <View style={styles.statIcon}>
-              <Ionicons
-                name="receipt-outline"
-                size={20}
-                color={Colors.light.primary}
-              />
-            </View>
-
-            <Text style={styles.statNumber}>
-              {orders.length}
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Orders
-            </Text>
-          </View>
+          <Stat
+            icon="receipt-outline"
+            value={orders.length}
+            label="Orders"
+          />
 
           <View style={styles.statDivider} />
 
-          <View style={styles.stat}>
-            <View style={styles.statIcon}>
-              <Ionicons
-                name="heart-outline"
-                size={20}
-                color="#EF4444"
-              />
-            </View>
-
-            <Text style={styles.statNumber}>
-              {wishlist.length}
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Wishlist
-            </Text>
-          </View>
+          <Stat
+            icon="heart-outline"
+            value={wishlist.length}
+            label="Wishlist"
+            iconColor="#EF4444"
+          />
 
           <View style={styles.statDivider} />
 
-          <View style={styles.stat}>
-            <View style={styles.statIcon}>
-              <Ionicons
-                name="cart-outline"
-                size={20}
-                color={Colors.light.primary}
-              />
-            </View>
-
-            <Text style={styles.statNumber}>
-              {cart.length}
-            </Text>
-
-            <Text style={styles.statLabel}>
-              Cart
-            </Text>
-          </View>
+          <Stat
+            icon="cart-outline"
+            value={cartCount}
+            label="Cart"
+          />
         </View>
 
-        {/* Account */}
+        {/* ACCOUNT */}
         <Text style={styles.sectionTitle}>
           My Account
         </Text>
@@ -202,15 +164,13 @@ export default function ProfileScreen() {
           title="My Orders"
           subtitle="View your order history"
           iconColor={Colors.light.primary}
-          onPress={() =>
-            router.push("/orders")
-          }
+          onPress={() => router.push("/orders")}
         />
 
         <MenuItem
           icon="heart-outline"
           title="Wishlist"
-          subtitle="Your saved products"
+          subtitle={`${wishlist.length} saved products`}
           iconColor="#EF4444"
           onPress={() =>
             router.push("/(tabs)/wishlist")
@@ -220,14 +180,14 @@ export default function ProfileScreen() {
         <MenuItem
           icon="cart-outline"
           title="My Cart"
-          subtitle="View your shopping cart"
+          subtitle={`${cartCount} items in your cart`}
           iconColor={Colors.light.primary}
           onPress={() =>
             router.push("/(tabs)/cart")
           }
         />
 
-        {/* Settings */}
+        {/* SETTINGS */}
         <Text style={styles.sectionTitle}>
           Settings
         </Text>
@@ -237,12 +197,10 @@ export default function ProfileScreen() {
           title="Settings"
           subtitle="App preferences and account"
           iconColor="#6B7280"
-          onPress={() =>
-            router.push("/settings")
-          }
+          onPress={() => router.push("/settings")}
         />
 
-        {/* Logout */}
+        {/* LOGOUT */}
         <Pressable
           style={({ pressed }) => [
             styles.logoutButton,
@@ -261,7 +219,6 @@ export default function ProfileScreen() {
           </Text>
         </Pressable>
 
-        {/* Version */}
         <Text style={styles.version}>
           EliteMart v1.0.0
         </Text>
@@ -270,10 +227,46 @@ export default function ProfileScreen() {
   );
 }
 
+/* ================= STAT ================= */
+
+type StatProps = {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  value: number;
+  label: string;
+  iconColor?: string;
+};
+
+function Stat({
+  icon,
+  value,
+  label,
+  iconColor = Colors.light.primary,
+}: StatProps) {
+  return (
+    <View style={styles.stat}>
+      <View style={styles.statIcon}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={iconColor}
+        />
+      </View>
+
+      <Text style={styles.statNumber}>
+        {value}
+      </Text>
+
+      <Text style={styles.statLabel}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/* ================= MENU ITEM ================= */
+
 type MenuItemProps = {
-  icon: React.ComponentProps<
-    typeof Ionicons
-  >["name"];
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   title: string;
   subtitle: string;
   iconColor: string;
@@ -321,6 +314,8 @@ function MenuItem({
     </Pressable>
   );
 }
+
+/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: {

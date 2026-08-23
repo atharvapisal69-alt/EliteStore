@@ -20,28 +20,37 @@ export default function LoginScreen() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] =
+    useState("");
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [loggingIn, setLoggingIn] =
+    useState(false);
 
   const handleLogin = async () => {
-    if (!name.trim()) {
-      Alert.alert("Missing Name", "Please enter your name.");
+    const cleanName = name.trim();
+    const cleanEmail =
+      email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      Alert.alert(
+        "Missing Email",
+        "Please enter your email."
+      );
       return;
     }
 
-    if (!email.trim()) {
-      Alert.alert("Missing Email", "Please enter your email.");
+    if (!cleanEmail.includes("@")) {
+      Alert.alert(
+        "Invalid Email",
+        "Please enter a valid email."
+      );
       return;
     }
 
-    if (!email.includes("@")) {
-      Alert.alert("Invalid Email", "Please enter a valid email.");
-      return;
-    }
-
-    if (!password.trim()) {
+    if (!password) {
       Alert.alert(
         "Missing Password",
         "Please enter your password."
@@ -52,26 +61,41 @@ export default function LoginScreen() {
     try {
       setLoggingIn(true);
 
-      const success = await login(
-        name,
-        email,
+      /*
+       * Admin does NOT bypass AuthContext.
+       * AuthContext performs Firebase login
+       * and sets isAdmin = true.
+       */
+
+      const result = await login(
+        cleanName,
+        cleanEmail,
         password
       );
 
-      if (success) {
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert(
-          "Login Failed",
-          "Unable to login. Please try again."
-        );
+      if (result === "admin") {
+        router.replace("/admin");
+        return;
       }
+
+      if (result === "customer") {
+        router.replace("/(tabs)");
+        return;
+      }
+
+      Alert.alert(
+        "Login Failed",
+        "Invalid email or password."
+      );
     } catch (error) {
-      console.log("Login error:", error);
+      console.log(
+        "Login error:",
+        error
+      );
 
       Alert.alert(
         "Error",
-        "Something went wrong."
+        "Something went wrong while logging in."
       );
     } finally {
       setLoggingIn(false);
@@ -92,9 +116,10 @@ export default function LoginScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo */}
           <View style={styles.logo}>
-            <Text style={styles.logoText}>E</Text>
+            <Text style={styles.logoText}>
+              E
+            </Text>
           </View>
 
           <Text style={styles.title}>
@@ -105,8 +130,9 @@ export default function LoginScreen() {
             Login to continue shopping
           </Text>
 
-          {/* Name */}
-          <Text style={styles.label}>Name</Text>
+          <Text style={styles.label}>
+            Name
+          </Text>
 
           <View style={styles.inputContainer}>
             <Ionicons
@@ -125,8 +151,9 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Email */}
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>
+            Email
+          </Text>
 
           <View style={styles.inputContainer}>
             <Ionicons
@@ -146,8 +173,9 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Password */}
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>
+            Password
+          </Text>
 
           <View style={styles.inputContainer}>
             <Ionicons
@@ -167,7 +195,9 @@ export default function LoginScreen() {
 
             <Pressable
               onPress={() =>
-                setShowPassword(!showPassword)
+                setShowPassword(
+                  (value) => !value
+                )
               }
             >
               <Ionicons
@@ -182,11 +212,11 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          {/* Login Button */}
           <Pressable
             style={[
               styles.loginButton,
-              loggingIn && styles.disabledButton,
+              loggingIn &&
+                styles.disabledButton,
             ]}
             onPress={handleLogin}
             disabled={loggingIn}
@@ -199,7 +229,15 @@ export default function LoginScreen() {
           </Pressable>
 
           <Text style={styles.demoText}>
-            Enter any name, email and password to continue.
+            Customer: use your registered account
+          </Text>
+
+          <Text style={styles.adminText}>
+            Admin: admin@elitemart.com
+          </Text>
+
+          <Text style={styles.adminPassword}>
+            Password: admin123
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -301,5 +339,20 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontSize: 13,
     marginTop: 18,
+  },
+
+  adminText: {
+    textAlign: "center",
+    color: "#2563EB",
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: "600",
+  },
+
+  adminPassword: {
+    textAlign: "center",
+    color: "#9CA3AF",
+    fontSize: 11,
+    marginTop: 3,
   },
 });

@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +16,7 @@ import {
   Text,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Banner from "@/components/Banner";
@@ -17,105 +24,189 @@ import ProductCard from "@/components/ProductCard";
 import SearchBar from "@/components/SearchBar";
 import { Colors } from "@/constants/theme";
 import { useCart } from "@/context/CartContext";
-import { useWishlist } from "@/context/WishlistContext";
 import { getProducts } from "@/services/api";
 import { Product } from "@/types/Product";
 
-type SortOption = "none" | "priceLow" | "priceHigh" | "rating";
+type SortOption =
+  | "none"
+  | "priceLow"
+  | "priceHigh"
+  | "rating";
 
 export default function HomeScreen() {
   const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
-  const [sort, setSort] = useState<SortOption>("none");
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [sort, setSort] =
+    useState<SortOption>("none");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
 
   const { addToCart } = useCart();
-  const { addToWishlist } = useWishlist();
 
-  // =========================
-  // FETCH PRODUCTS
-  // =========================
-  const fetchProducts = async () => {
-    try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error) {
-      console.log("Error fetching products:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  // =====================================================
+  // LOAD PRODUCTS FROM FIREBASE
+  // =====================================================
+
+  const fetchProducts = useCallback(
+    async (showLoader = false) => {
+      try {
+        if (showLoader) {
+          setLoading(true);
+        }
+
+        console.log(
+          "🔥 Loading customer products from Firebase..."
+        );
+
+        const data = await getProducts();
+
+        console.log(
+          "🔥 Firebase customer product count:",
+          data.length
+        );
+
+        setProducts(data);
+      } catch (error) {
+        console.error(
+          "❌ Customer product loading error:",
+          error
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    []
+  );
+
+  // =====================================================
+  // INITIAL LOAD
+  // =====================================================
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    fetchProducts(true);
+  }, [fetchProducts]);
 
-  // =========================
+  // =====================================================
+  // RELOAD WHEN USER RETURNS TO HOME
+  // =====================================================
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts(false);
+    }, [fetchProducts])
+  );
+
+  // =====================================================
   // CATEGORIES
-  // =========================
+  // =====================================================
+
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
-      new Set(products.map((item) => item.category))
+      new Set(
+        products
+          .map((item) => item.category)
+          .filter(Boolean)
+      )
     );
 
     return ["All", ...uniqueCategories];
   }, [products]);
 
-  // =========================
+  // =====================================================
   // FILTER + SEARCH + SORT
-  // =========================
+  // =====================================================
+
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
-    const searchText = search.trim().toLowerCase();
+    const searchText =
+      search.trim().toLowerCase();
 
+    // SEARCH
     if (searchText) {
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(searchText) ||
-          item.category.toLowerCase().includes(searchText) ||
-          item.brand.toLowerCase().includes(searchText)
-      );
+      result = result.filter((item) => {
+        const title =
+          item.title?.toLowerCase() || "";
+
+        const categoryText =
+          item.category?.toLowerCase() || "";
+
+        const brand =
+          item.brand?.toLowerCase() || "";
+
+        return (
+          title.includes(searchText) ||
+          categoryText.includes(searchText) ||
+          brand.includes(searchText)
+        );
+      });
     }
 
+    // CATEGORY
     if (category !== "All") {
       result = result.filter(
-        (item) => item.category === category
+        (item) =>
+          item.category === category
       );
     }
 
+    // SORT
     if (sort === "priceLow") {
-      result.sort((a, b) => a.price - b.price);
+      result.sort(
+        (a, b) =>
+          Number(a.price || 0) -
+          Number(b.price || 0)
+      );
     }
 
     if (sort === "priceHigh") {
-      result.sort((a, b) => b.price - a.price);
+      result.sort(
+        (a, b) =>
+          Number(b.price || 0) -
+          Number(a.price || 0)
+      );
     }
 
     if (sort === "rating") {
-      result.sort((a, b) => b.rating - a.rating);
+      result.sort(
+        (a, b) =>
+          Number(b.rating || 0) -
+          Number(a.rating || 0)
+      );
     }
 
     return result;
-  }, [products, search, category, sort]);
+  }, [
+    products,
+    search,
+    category,
+    sort,
+  ]);
 
-  // =========================
+  // =====================================================
   // REFRESH
-  // =========================
-  const onRefresh = () => {
+  // =====================================================
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchProducts();
+
+    await fetchProducts(false);
   };
 
-  // =========================
+  // =====================================================
   // CLEAR FILTERS
-  // =========================
+  // =====================================================
+
   const clearFilters = () => {
     setSearch("");
     setCategory("All");
@@ -127,9 +218,10 @@ export default function HomeScreen() {
     category !== "All" ||
     sort !== "none";
 
-  // =========================
+  // =====================================================
   // LOADING
-  // =========================
+  // =====================================================
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loading}>
@@ -157,82 +249,128 @@ export default function HomeScreen() {
     );
   }
 
+  // =====================================================
+  // SCREEN
+  // =====================================================
+
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
         data={filteredProducts}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) =>
+          `${item.id}-${index}`
+        }
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.listContent}
+        columnWrapperStyle={
+          styles.columnWrapper
+        }
+        contentContainerStyle={
+          styles.listContent
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.light.primary}
+            tintColor={
+              Colors.light.primary
+            }
           />
         }
         ListHeaderComponent={
           <>
-            {/* ================= HEADER ================= */}
+            {/* HEADER */}
+
             <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <Text style={styles.delivery}>
+              <View
+                style={styles.headerLeft}
+              >
+                <Text
+                  style={styles.delivery}
+                >
                   Deliver To
                 </Text>
 
-                <View style={styles.locationRow}>
+                <View
+                  style={styles.locationRow}
+                >
                   <Ionicons
                     name="location"
                     size={17}
-                    color={Colors.light.primary}
+                    color={
+                      Colors.light.primary
+                    }
                   />
 
-                  <Text style={styles.name}>
+                  <Text
+                    style={styles.name}
+                  >
                     Atharva
                   </Text>
 
-                  <Text style={styles.wave}>
+                  <Text
+                    style={styles.wave}
+                  >
                     👋
                   </Text>
                 </View>
               </View>
 
               <Pressable
-                style={styles.notificationButton}
+                style={
+                  styles.notificationButton
+                }
                 onPress={() => {}}
               >
                 <Ionicons
                   name="notifications-outline"
                   size={24}
-                  color={Colors.light.text}
+                  color={
+                    Colors.light.text
+                  }
                 />
 
-                <View style={styles.notificationDot} />
+                <View
+                  style={
+                    styles.notificationDot
+                  }
+                />
               </Pressable>
             </View>
 
-            {/* ================= SEARCH ================= */}
+            {/* SEARCH */}
+
             <SearchBar
               value={search}
               onChangeText={setSearch}
             />
 
-            {/* ================= BANNER ================= */}
+            {/* BANNER */}
+
             <Banner />
 
-            {/* ================= CATEGORIES ================= */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
+            {/* CATEGORIES */}
+
+            <View
+              style={styles.sectionHeader}
+            >
+              <Text
+                style={styles.sectionTitle}
+              >
                 Categories
               </Text>
 
               {category !== "All" && (
                 <Pressable
-                  onPress={() => setCategory("All")}
+                  onPress={() =>
+                    setCategory("All")
+                  }
                 >
-                  <Text style={styles.clearSmall}>
+                  <Text
+                    style={
+                      styles.clearSmall
+                    }
+                  >
                     Reset
                   </Text>
                 </Pressable>
@@ -242,13 +380,18 @@ export default function HomeScreen() {
             <FlatList
               data={categories}
               horizontal
-              showsHorizontalScrollIndicator={false}
+              showsHorizontalScrollIndicator={
+                false
+              }
               keyExtractor={(item) => item}
               contentContainerStyle={
                 styles.categoryList
               }
-              renderItem={({ item }) => {
-                const active = category === item;
+              renderItem={({
+                item,
+              }) => {
+                const active =
+                  category === item;
 
                 return (
                   <Pressable
@@ -275,16 +418,30 @@ export default function HomeScreen() {
               }}
             />
 
-            {/* ================= PRODUCTS HEADER ================= */}
-            <View style={styles.productsHeader}>
+            {/* PRODUCTS HEADER */}
+
+            <View
+              style={
+                styles.productsHeader
+              }
+            >
               <View>
-                <Text style={styles.sectionTitle}>
+                <Text
+                  style={
+                    styles.sectionTitle
+                  }
+                >
                   Popular Products
                 </Text>
 
-                <Text style={styles.resultCount}>
+                <Text
+                  style={
+                    styles.resultCount
+                  }
+                >
                   {filteredProducts.length}{" "}
-                  {filteredProducts.length === 1
+                  {filteredProducts.length ===
+                  1
                     ? "product"
                     : "products"}{" "}
                   found
@@ -293,8 +450,12 @@ export default function HomeScreen() {
 
               {hasFilters && (
                 <Pressable
-                  style={styles.clearButton}
-                  onPress={clearFilters}
+                  style={
+                    styles.clearButton
+                  }
+                  onPress={
+                    clearFilters
+                  }
                 >
                   <Ionicons
                     name="close-circle-outline"
@@ -304,24 +465,36 @@ export default function HomeScreen() {
                     }
                   />
 
-                  <Text style={styles.clearText}>
+                  <Text
+                    style={
+                      styles.clearText
+                    }
+                  >
                     Clear
                   </Text>
                 </Pressable>
               )}
             </View>
 
-            {/* ================= SORT ================= */}
-            <View style={styles.sortContainer}>
-              <Text style={styles.sortLabel}>
+            {/* SORT */}
+
+            <View
+              style={styles.sortContainer}
+            >
+              <Text
+                style={styles.sortLabel}
+              >
                 Sort by
               </Text>
 
-              <View style={styles.sortRow}>
+              <View
+                style={styles.sortRow}
+              >
                 <Pressable
                   style={[
                     styles.sortButton,
-                    sort === "priceLow" &&
+                    sort ===
+                      "priceLow" &&
                       styles.activeSort,
                   ]}
                   onPress={() =>
@@ -345,7 +518,8 @@ export default function HomeScreen() {
                   <Text
                     style={[
                       styles.sortText,
-                      sort === "priceLow" &&
+                      sort ===
+                        "priceLow" &&
                         styles.activeSortText,
                     ]}
                   >
@@ -356,12 +530,14 @@ export default function HomeScreen() {
                 <Pressable
                   style={[
                     styles.sortButton,
-                    sort === "priceHigh" &&
+                    sort ===
+                      "priceHigh" &&
                       styles.activeSort,
                   ]}
                   onPress={() =>
                     setSort(
-                      sort === "priceHigh"
+                      sort ===
+                        "priceHigh"
                         ? "none"
                         : "priceHigh"
                     )
@@ -380,7 +556,8 @@ export default function HomeScreen() {
                   <Text
                     style={[
                       styles.sortText,
-                      sort === "priceHigh" &&
+                      sort ===
+                        "priceHigh" &&
                         styles.activeSortText,
                     ]}
                   >
@@ -425,7 +602,9 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View
+              style={styles.divider}
+            />
           </>
         }
         renderItem={({ item }) => (
@@ -433,40 +612,67 @@ export default function HomeScreen() {
             product={item}
             onPress={() => {
               router.push({
-                pathname: "/product/[id]",
+                pathname:
+                  "/product/[id]",
                 params: {
                   id: item.id.toString(),
                 },
               });
             }}
-            onAddToCart={() => addToCart(item)}
-            onWishlist={() => addToWishlist(item)}
+            onAddToCart={() =>
+              addToCart(item)
+            }
           />
         )}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
+          <View
+            style={
+              styles.emptyContainer
+            }
+          >
+            <View
+              style={
+                styles.emptyIconContainer
+              }
+            >
               <Ionicons
                 name="search-outline"
                 size={42}
-                color={Colors.light.primary}
+                color={
+                  Colors.light.primary
+                }
               />
             </View>
 
-            <Text style={styles.emptyTitle}>
+            <Text
+              style={styles.emptyTitle}
+            >
               No Products Found
             </Text>
 
-            <Text style={styles.emptySubtitle}>
-              We couldn&apos;t find any products matching
-              your search.
+            <Text
+              style={
+                styles.emptySubtitle
+              }
+            >
+              We couldn&apos;t find any
+              products matching your
+              search.
             </Text>
 
             <Pressable
-              style={styles.emptyButton}
-              onPress={clearFilters}
+              style={
+                styles.emptyButton
+              }
+              onPress={
+                clearFilters
+              }
             >
-              <Text style={styles.emptyButtonText}>
+              <Text
+                style={
+                  styles.emptyButtonText
+                }
+              >
                 Clear Filters
               </Text>
             </Pressable>
@@ -477,12 +683,15 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  // ================= CONTAINER =================
+// =====================================================
+// STYLES
+// =====================================================
 
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor:
+      Colors.light.background,
     paddingHorizontal: 16,
   },
 
@@ -491,16 +700,16 @@ const styles = StyleSheet.create({
   },
 
   columnWrapper: {
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
   },
-
-  // ================= LOADING =================
 
   loading: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: Colors.light.background,
+    backgroundColor:
+      Colors.light.background,
     paddingHorizontal: 30,
   },
 
@@ -528,11 +737,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ================= HEADER =================
-
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     alignItems: "center",
     marginTop: 8,
     marginBottom: 4,
@@ -595,12 +803,11 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
   },
 
-  // ================= CATEGORIES =================
-
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     marginTop: 18,
     marginBottom: 10,
   },
@@ -632,8 +839,10 @@ const styles = StyleSheet.create({
   },
 
   activeCategory: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
+    backgroundColor:
+      Colors.light.primary,
+    borderColor:
+      Colors.light.primary,
   },
 
   categoryText: {
@@ -646,11 +855,10 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  // ================= PRODUCTS HEADER =================
-
   productsHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     alignItems: "center",
     marginTop: 22,
     marginBottom: 4,
@@ -677,8 +885,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.light.primary,
   },
-
-  // ================= SORT =================
 
   sortContainer: {
     marginTop: 12,
@@ -709,8 +915,10 @@ const styles = StyleSheet.create({
   },
 
   activeSort: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
+    backgroundColor:
+      Colors.light.primary,
+    borderColor:
+      Colors.light.primary,
   },
 
   sortText: {
@@ -730,8 +938,6 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 4,
   },
-
-  // ================= EMPTY =================
 
   emptyContainer: {
     alignItems: "center",
@@ -766,7 +972,8 @@ const styles = StyleSheet.create({
 
   emptyButton: {
     marginTop: 20,
-    backgroundColor: Colors.light.primary,
+    backgroundColor:
+      Colors.light.primary,
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 12,

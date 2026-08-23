@@ -13,32 +13,32 @@ type WishlistContextType = {
   addToWishlist: (product: Product) => void;
   removeFromWishlist: (id: number) => void;
   toggleWishlist: (product: Product) => void;
+  clearWishlist: () => Promise<void>;
   isInWishlist: (id: number) => boolean;
 };
 
 const WishlistContext =
   createContext<WishlistContextType | undefined>(undefined);
 
-export const WishlistProvider = ({
+export function WishlistProvider({
   children,
 }: {
   children: React.ReactNode;
-}) => {
+}) {
   const [wishlist, setWishlist] = useState<Product[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Load wishlist
+  // LOAD
   useEffect(() => {
     const loadWishlist = async () => {
       try {
-        const savedWishlist =
-          await AsyncStorage.getItem("wishlist");
+        const saved = await AsyncStorage.getItem("wishlist");
 
-        if (savedWishlist) {
-          setWishlist(JSON.parse(savedWishlist));
+        if (saved) {
+          setWishlist(JSON.parse(saved));
         }
       } catch (error) {
-        console.log("Error loading wishlist:", error);
+        console.log("Wishlist load error:", error);
       } finally {
         setLoaded(true);
       }
@@ -47,66 +47,73 @@ export const WishlistProvider = ({
     loadWishlist();
   }, []);
 
-  // Save wishlist
+  // SAVE
   useEffect(() => {
     if (!loaded) return;
 
-    const saveWishlist = async () => {
-      try {
-        await AsyncStorage.setItem(
-          "wishlist",
-          JSON.stringify(wishlist)
-        );
-      } catch (error) {
-        console.log("Error saving wishlist:", error);
-      }
-    };
-
-    saveWishlist();
+    AsyncStorage.setItem(
+      "wishlist",
+      JSON.stringify(wishlist)
+    ).catch((error) => {
+      console.log("Wishlist save error:", error);
+    });
   }, [wishlist, loaded]);
 
-  // Add
+  // ADD
   const addToWishlist = (product: Product) => {
-    setWishlist((currentWishlist) => {
-      const exists = currentWishlist.some(
-        (item) => item.id === product.id
-      );
-
-      if (exists) {
-        return currentWishlist;
+    setWishlist((current) => {
+      if (
+        current.some(
+          (item) => item.id === product.id
+        )
+      ) {
+        return current;
       }
 
-      return [...currentWishlist, product];
+      return [...current, product];
     });
   };
 
-  // Remove
+  // REMOVE ONE
   const removeFromWishlist = (id: number) => {
-    setWishlist((currentWishlist) =>
-      currentWishlist.filter((item) => item.id !== id)
+    setWishlist((current) =>
+      current.filter((item) => item.id !== id)
     );
   };
 
-  // Toggle
+  // TOGGLE
   const toggleWishlist = (product: Product) => {
-    setWishlist((currentWishlist) => {
-      const exists = currentWishlist.some(
+    setWishlist((current) => {
+      const exists = current.some(
         (item) => item.id === product.id
       );
 
       if (exists) {
-        return currentWishlist.filter(
+        return current.filter(
           (item) => item.id !== product.id
         );
       }
 
-      return [...currentWishlist, product];
+      return [...current, product];
     });
   };
 
-  // Check
+  // REMOVE ALL
+  const clearWishlist = async () => {
+    setWishlist([]);
+
+    try {
+      await AsyncStorage.removeItem("wishlist");
+    } catch (error) {
+      console.log("Clear wishlist error:", error);
+    }
+  };
+
+  // CHECK
   const isInWishlist = (id: number) => {
-    return wishlist.some((item) => item.id === id);
+    return wishlist.some(
+      (item) => item.id === id
+    );
   };
 
   return (
@@ -116,22 +123,23 @@ export const WishlistProvider = ({
         addToWishlist,
         removeFromWishlist,
         toggleWishlist,
+        clearWishlist,
         isInWishlist,
       }}
     >
       {children}
     </WishlistContext.Provider>
   );
-};
+}
 
-export const useWishlist = () => {
+export function useWishlist() {
   const context = useContext(WishlistContext);
 
   if (!context) {
     throw new Error(
-      "useWishlist must be used within WishlistProvider"
+      "useWishlist must be used inside WishlistProvider"
     );
   }
 
   return context;
-};
+}
